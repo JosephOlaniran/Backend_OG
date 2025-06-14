@@ -25,12 +25,10 @@ export class Comment {
   @Column()
   ideaId: number;
 
-  @ManyToOne(() => User, (user) => user.id,{
-  nullable: true,
-  onDelete: 'SET NULL', // if user is deleted, keep the comment but nullify the userId
-  })
+  @ManyToOne(() => User, (user) => user.id)
   @JoinColumn({ name: 'userId' })
   user: User;
+
 
   @Column({ nullable: true })
   userId: string;
