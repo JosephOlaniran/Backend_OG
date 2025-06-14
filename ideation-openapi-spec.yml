@@ -1,0 +1,1221 @@
+openapi: 3.0.3
+info:
+  title: Ideation Platform API
+  version: 1.2.0
+  description: |
+    Comprehensive API documentation for the Ideation Platform - a NestJS-based backend for innovation management.
+    
+    Features:
+    - JWT authentication with role-based access control
+    - Idea submission with file upload support
+    - Voting system with upvote/downvote functionality
+    - Comment system with user associations
+    - Activity logging and audit trails
+    - Admin dashboard with detailed analytics
+    - Real-time metrics and progress tracking
+    
+    All idea endpoints return IdeaResponseDto objects containing computed fields like vote counts, comment counts, and user information.
+
+servers:
+  - url: https://backendtesting-production.up.railway.app/
+
+paths:
+  /:
+    get:
+      summary: Root Hello Message
+      responses:
+        '200':
+          description: Hello response
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /user/login:
+    post:
+      summary: User login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [employeeId, password]
+              properties:
+                employeeId:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+
+  /user/me:
+    get:
+      summary: Get current user profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile without innovation metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /user/{id}/activity:
+    get:
+      summary: Get user activity stats
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User activity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ideasSubmitted:
+                    type: integer
+
+  /categories:
+    get:
+      summary: Get all idea categories
+      responses:
+        '200':
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /idea:
+    post:
+      summary: Create a new idea
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IdeaCreateRequest'
+      responses:
+        '201':
+          description: Idea created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Idea'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid or missing JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: Get all ideas with filtering and pagination
+      parameters:
+        - name: employeeId
+          in: query
+          schema:
+            type: string
+          description: Filter by employee ID
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by category
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [recent, popular]
+            default: recent
+          description: Sort order
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search in idea title and description
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of records to skip for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Maximum number of records to return (max 100)
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected, implemented]
+          description: Filter by idea status
+      responses:
+        '200':
+          description: List of ideas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Idea'
+
+  /idea/{id}:
+    get:
+      summary: Get an idea by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Idea ID
+      responses:
+        '200':
+          description: Idea details with comment count and vote counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Idea'
+        '404':
+          description: Idea not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: Update an idea
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Idea ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdeaUpdateRequest'
+      responses:
+        '200':
+          description: Idea updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Idea'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not owner of the idea
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Idea not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete an idea
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Idea ID
+      responses:
+        '204':
+          description: Idea deleted successfully
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not owner of the idea
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Idea not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /idea/{id}/approve:
+    patch:
+      summary: Approve an idea (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Idea ID
+      responses:
+        '200':
+          description: Idea approved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Idea'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Idea not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /idea/{id}/reject:
+    patch:
+      summary: Reject an idea (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Idea ID
+      responses:
+        '200':
+          description: Idea rejected successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Idea'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Idea not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /idea/{id}/implement:
+    patch:
+      summary: Mark an idea as implemented (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Idea ID
+      responses:
+        '200':
+          description: Idea marked as implemented successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Idea'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Idea not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /comment/{ideaId}:
+    post:
+      summary: Post a comment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ideaId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID of the idea to comment on
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                  description: Content of the comment
+              required: [text]
+      responses:
+        '201':
+          description: Comment created with user information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Idea not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: Get comments for an idea
+      parameters:
+        - name: ideaId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID of the idea
+      responses:
+        '200':
+          description: List of comments with user information
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Comment'
+        '404':
+          description: Idea not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /vote/{ideaId}:
+    post:
+      summary: Vote on an idea
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ideaId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID of the idea to vote on
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isUpvote:
+                  type: boolean
+                  description: True for upvote, false for downvote
+              required: [isUpvote]
+      responses:
+        '200':
+          description: Vote registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vote'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Idea not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /dashboard/progress:
+    get:
+      summary: Get user submission progress
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Progress stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  submitted:
+                    type: integer
+                  goal:
+                    type: integer
+
+  /dashboard/metrics:
+    get:
+      summary: Get dashboard innovation metrics
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  topIdeasPercentage:
+                    type: number
+                  engagementRate:
+                    type: number
+                  communityPoints:
+                    type: integer
+                  ideasImplemented:
+                    type: integer
+
+  /admin/ideas:
+    get:
+      summary: Admin - get all ideas
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: includeData
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+            default: 'true'
+          description: Set to 'false' to return only count
+      responses:
+        '200':
+          description: List of all ideas with comment counts and timestamps or count only
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Idea'
+                  count:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/votes:
+    get:
+      summary: Admin - get all votes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: includeData
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+            default: 'true'
+          description: Set to 'false' to return only count
+      responses:
+        '200':
+          description: List of all votes with relations or count only
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Vote'
+                  count:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/comments:
+    get:
+      summary: Admin - get all comments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: includeData
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+            default: 'true'
+          description: Set to 'false' to return only count
+      responses:
+        '200':
+          description: List of all comments with relations or count only
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Comment'
+                  count:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/users:
+    get:
+      summary: Admin - get all users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: includeData
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+            default: 'true'
+          description: Set to 'false' to return only count
+      responses:
+        '200':
+          description: List of all users without passwords or count only
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  count:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/counts:
+    get:
+      summary: Admin - get total entity counts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Total counts for all entities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ideas:
+                    type: integer
+                  votes:
+                    type: integer
+                  comments:
+                    type: integer
+                  users:
+                    type: integer
+
+  /admin/stats:
+    get:
+      summary: Admin - get detailed entity statistics
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Detailed entity statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStatsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/activity:
+    get:
+      summary: Admin - get recent activities
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Number of activities to return
+      responses:
+        '200':
+          description: List of recent activities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Activity'
+
+  /admin/activity/user/{userId}:
+    get:
+      summary: Admin - get activities by user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of activities to return
+      responses:
+        '200':
+          description: List of activities for specific user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Activity'
+
+  /admin/activity/idea/{ideaId}:
+    get:
+      summary: Admin - get activities by idea
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ideaId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of activities to return
+      responses:
+        '200':
+          description: List of activities for specific idea
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Activity'
+
+  /admin/activity/type/{type}:
+    get:
+      summary: Admin - get activities by type
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [idea_submitted, idea_voted, idea_commented, idea_approved, idea_rejected, idea_implemented]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of activities to return
+      responses:
+        '200':
+          description: List of activities of specific type
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Activity'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique user identifier
+        name:
+          type: string
+          description: Full name of the user
+        employeeId:
+          type: string
+          description: Employee identification number
+        email:
+          type: string
+          format: email
+          description: User's email address
+        role:
+          type: string
+          enum: [admin, employee]
+          description: User's role in the system
+        gender:
+          type: string
+          enum: [male, female, other]
+          description: User's gender
+      required: [id, name, employeeId, email, role, gender]
+
+    Idea:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique idea identifier
+        title:
+          type: string
+          description: Title of the idea
+        description:
+          type: string
+          description: Detailed description of the idea
+        category:
+          type: string
+          description: Category of the idea
+        impactLevel:
+          type: string
+          description: Expected impact level of the idea
+        hashtags:
+          type: array
+          items:
+            type: string
+          description: Array of hashtags associated with the idea
+        attachmentUrls:
+          type: array
+          items:
+            type: string
+          description: URLs of uploaded attachments
+        requiredResources:
+          type: string
+          description: Resources required to implement the idea
+        anonymousId:
+          type: string
+          description: Anonymous identifier for the idea submitter
+        status:
+          type: string
+          enum: [pending, approved, implmented, rejected]
+          description: Current status of the idea
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the idea was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the idea was last updated
+        commentCount:
+          type: integer
+          minimum: 0
+          description: Number of comments on the idea
+        upVotes:
+          type: integer
+          minimum: 0
+          description: Number of upvotes received
+        downVotes:
+          type: integer
+          minimum: 0
+          description: Number of downvotes received
+        user:
+          $ref: '#/components/schemas/User'
+          description: User who submitted the idea (without password)
+      required: [id, title, description, category, impactLevel, hashtags, attachmentUrls, requiredResources, anonymousId, status, createdAt, updatedAt, commentCount, upVotes, downVotes, user]
+
+    IdeaCreateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Title of the idea
+          maxLength: 255
+        description:
+          type: string
+          description: Detailed description of the idea
+        category:
+          type: string
+          description: Category of the idea
+        impactLevel:
+          type: string
+          description: Expected impact level of the idea
+          enum: [low, medium, high, critical]
+        hashtags:
+          type: array
+          items:
+            type: string
+          description: Array of hashtags associated with the idea
+        requiredResources:
+          type: string
+          description: Resources required to implement the idea
+        attachments:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: File attachments (max 5 files, 5MB each)
+          maxItems: 5
+      required: [title, description, category, impactLevel]
+
+    IdeaUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Title of the idea
+          maxLength: 255
+        description:
+          type: string
+          description: Detailed description of the idea
+        category:
+          type: string
+          description: Category of the idea
+        impactLevel:
+          type: string
+          description: Expected impact level of the idea
+          enum: [low, medium, high, critical]
+        hashtags:
+          type: array
+          items:
+            type: string
+          description: Array of hashtags associated with the idea
+        requiredResources:
+          type: string
+          description: Resources required to implement the idea
+
+    Vote:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique vote identifier
+        isUpvote:
+          type: boolean
+          description: True for upvote, false for downvote
+        ideaId:
+          type: integer
+          description: ID of the idea being voted on
+        userId:
+          type: string
+          format: uuid
+          description: ID of the user who cast the vote
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the vote was cast
+        user:
+          $ref: '#/components/schemas/User'
+          description: User who cast the vote
+        idea:
+          $ref: '#/components/schemas/Idea'
+          description: Idea that was voted on
+      required: [id, isUpvote, ideaId, userId, createdAt]
+
+    Activity:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique activity identifier
+        type:
+          type: string
+          enum: [idea_submitted, idea_voted, idea_commented, idea_approved, idea_rejected, idea_implemented]
+          description: Type of activity performed
+        userId:
+          type: string
+          format: uuid
+          description: ID of the user who performed the activity
+        ideaId:
+          type: integer
+          description: ID of the idea related to the activity
+        metadata:
+          type: object
+          description: Additional metadata about the activity
+          properties:
+            ideaTitle:
+              type: string
+            voteType:
+              type: string
+              enum: [upvote, downvote]
+            userName:
+              type: string
+            userEmail:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the activity occurred
+        user:
+          $ref: '#/components/schemas/User'
+          description: User who performed the activity
+        idea:
+          $ref: '#/components/schemas/Idea'
+          description: Idea related to the activity
+      required: [id, type, userId, createdAt]
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique comment identifier
+        text:
+          type: string
+          description: Content of the comment
+        ideaId:
+          type: integer
+          description: ID of the idea being commented on
+        userId:
+          type: string
+          format: uuid
+          description: ID of the user who posted the comment
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the comment was created
+        user:
+          $ref: '#/components/schemas/User'
+          description: User who posted the comment
+        idea:
+          $ref: '#/components/schemas/Idea'
+          description: Idea that was commented on
+      required: [id, text, ideaId, userId, createdAt]
+
+    ErrorResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          description: HTTP status code
+        message:
+          type: string
+          description: Error message or validation errors
+        error:
+          type: string
+          description: Error type or HTTP status name
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO timestamp when the error occurred
+        path:
+          type: string
+          description: API endpoint path where the error occurred
+      required: [statusCode, message, error, timestamp, path]
+
+
+
+    AdminStatsResponse:
+      type: object
+      properties:
+        ideas:
+          type: object
+          properties:
+            total:
+              type: integer
+            pending:
+              type: integer
+            approved:
+              type: integer
+            rejected:
+              type: integer
+            implemented:
+              type: integer
+            byCategory:
+              type: object
+              additionalProperties:
+                type: integer
+        votes:
+          type: object
+          properties:
+            total:
+              type: integer
+            upvotes:
+              type: integer
+            downvotes:
+              type: integer
+        comments:
+          type: object
+          properties:
+            total:
+              type: integer
+            averagePerIdea:
+              type: number
+        users:
+          type: object
+          properties:
+            total:
+              type: integer
+            admins:
+              type: integer
+            employees:
+              type: integer
+            activeThisMonth:
+              type: integer
