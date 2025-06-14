@@ -25,11 +25,14 @@ export class Comment {
   @Column()
   ideaId: number;
 
-  @ManyToOne(() => User, (user) => user.id)
+  @ManyToOne(() => User, (user) => user.id,{
+  nullable: true,
+  onDelete: 'SET NULL', // if user is deleted, keep the comment but nullify the userId
+  })
   @JoinColumn({ name: 'userId' })
   user: User;
 
-  @Column()
+  @Column({ nullable: true })
   userId: string;
 
   @CreateDateColumn()
